@@ -2,21 +2,48 @@ package q
 
 import scala.collection.mutable
 
-// todo - doc
 object Q {
   type Priority = Int
+
+  /**
+    * Generalized burst rate, as in Problem B. Observed only for priority which is defined in the partial function;
+    * if not defined, Constraint B is not observed for that priority
+    */
   type BurstRate = PartialFunction[Priority, Int]
 
-  val UnlimitedCapacity = Int.MaxValue
+  /** default burst rate of constant 2 for each and every priority (as in Problem A) */
   val DefaultBurstRate: BurstRate = { case _ => 2 }
+
+  val UnlimitedCapacity = Int.MaxValue
 }
 
 case class Item[T](priority: Q.Priority, value: T)
 
 object Item {
+  /** Convenient if priority is not a concern */
   def apply[T](value: T): Item[T] = Item(priority = 3, value = value)
 }
 
+/**
+  * A priority queue, which observes Constraint A and Constraint B (including a solution for Problem A1, and Problem B),
+  * and has a capacity limitation. It is '''not''' thread safe, but is designed only for single thread use. For thread
+  * safety in a concurrent setup, check [[concurrent]]
+  *
+  * = Implementation Details =
+  *
+  * One dedicated internal FIFO queue exists for each priority: e.g. Q,,p,, for priority P. An inbound item of
+  * priority P, item,,p,,, is always enqueued into its dedicated queue Q,,p,,. To observe Constraint A, next outbound
+  * item is always dequeued from the queue for the highest priority.
+  *
+  * If there is a burst rate defined for a priority (as by [[burstRate]]), the count of dequeued items of that priority
+  * is tracked in order to observe Constraint B. If the count reaches the burst rate, the next outbound item is dequeued
+  * from the internal queue of the highest priority which is lower than that of the just bursted one; if such item does
+  * not exist, it falls back to observe Constraint A.
+  *
+  * @param capacity Capacity of the queue
+  * @param burstRate Burst rate per priority
+  * @tparam T Type of item value
+  */
 case class Q[T](capacity: Int = Q.UnlimitedCapacity, burstRate: Q.BurstRate = Q.DefaultBurstRate) {
   // zero capacity would cause deadlock
   assert(capacity > 0)
